@@ -1,0 +1,5 @@
+{
+    "key": "ctrl+shift+B",
+    "command": "workbench.action.tasks.runTask",
+    "args": "C/C++: gcc build active file"
+}

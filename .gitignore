@@ -1,0 +1,7 @@
+.idea/
+tmp_*/
+__pycache__
+mmt_c5.dSYM
+mmt_c5
+datafile.txt
+datafile_expected.txt
