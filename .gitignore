@@ -1,7 +1,9 @@
 .idea/
-tmp_*/
+tmp_*
 __pycache__
-mmt_c5.dSYM
-mmt_c5
 datafile.txt
 datafile_expected.txt
+mmt_c5
+mmt_c5.dSYM
+mmt_c5.[^c][^p][^p]*
+mmt_c5_result.txt

@@ -1,18 +1,16 @@
-import copy
 import os
 import random
 import sys
-import time
 
 random.seed()
 
 
-# -127 - 127
-MIN_RANGE = -127
+# -128 ... 127, but for right border or range 127+1
+MIN_RANGE = -128
 MAX_RANGE = 128
 
 
-class Char:
+class Char:  # int('1').__xor__(int('2'))
     value = [0, 0, 0, 0, 0, 0, 0, 0]
 
     def __init__(self, v):
@@ -23,7 +21,7 @@ class Char:
 
     @staticmethod
     def from_int(num):
-        if num < -127 or num > 255:
+        if num < -128 or num > 255:
             raise Exception('char value overflow')
         bits = [0, 0, 0, 0, 0, 0, 0, 0]
         # num_str = bin(num).removeprefix('-').removeprefix('0b')  # need python >=3.9
@@ -41,20 +39,13 @@ class Char:
         return bits
 
     def xor(self, v):
-        val = self.from_int(v)
-        for i in range(8):
-            res = self.value[i] + val[i]
-            if res > 1:
-                self.value[i] = 0
-            else:
-                self.value[i] = res
+        self.value = [x^y for x,y in zip(self.value, self.from_int(v))]
 
     def to_int(self):
         is_negative = self.value[0]
-
         if is_negative:
-            reverse = [abs(x - 1) for x in self.value]
-            res = int(''.join([str(x) for x in reverse]), 2) + 1
+            invert = [abs(x - 1) for x in self.value]
+            res = int(''.join([str(x) for x in invert]), 2) + 1
             res = -res
         else:
             res = int(''.join([str(x) for x in self.value[:]]), 2)
@@ -75,8 +66,7 @@ def random_value():
     return value
 
 
-def main(fs=16, dt_filename='datafile.txt', exp_filename='datafile_expected.txt'):
-    print(f'{fs}, {dt_filename}, {exp_filename}', file=sys.stderr)
+def main(fs=32, dt_filename='datafile.txt', exp_filename='datafile_expected.txt'):
     writen_bytes = 0
     first_value = random_value()
     res_sum = first_value
@@ -128,12 +118,8 @@ def main(fs=16, dt_filename='datafile.txt', exp_filename='datafile_expected.txt'
 
 
 if __name__ == "__main__":
-    start_time = time.time()
 
     file_size = 32
-    # file_size = 32
-    # file_size = 1024
-    # file_size = 1048576
     data_file = 'datafile.txt'
     expect_file = 'datafile_expected.txt'
 
@@ -147,15 +133,6 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2:
         file_size = sys.argv[1]
 
-    print(f'{sys.argv}\n{file_size}, {data_file}, {expect_file}', file=sys.stderr)
-
     main(fs=int(file_size), dt_filename=data_file, exp_filename=expect_file)
-
-    # ch = Char(25)  # 25 -> '11001'
-    # print(f'25 -> {ch}')
-    # ch.xor(5)
-    # print(f'25^5 = {ch} ', '[', ch.to_int(), ']')  # 25 xor 5 = 28 -> '11001' xor '101' = '11100'
-
-    # print("==== execution time: {:.1f} seconds ====".format(time.time() - start_time), file=sys.stderr)
 
     exit()
