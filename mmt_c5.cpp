@@ -6,55 +6,47 @@
 #include <condition_variable>
 #include <queue>
 
-//using namespace std;
-
-const int queue_size = 2;
+uint queue_max_size;
+uint queue_min_size;
 
 int res_summary;
 int res_subtract;
 char res_xor;
 
 int first_value;
-//int next_value;
 
 bool eof = false;
 std::ifstream datafile;
 
 std::mutex m;
-std::queue<int> queue;
 std::condition_variable cv;
-std::condition_variable cv2;
+std::queue<int> queue;
 
 void action_read(){
     int next_value;
+    bool skip = false;
     std::cerr << "Reader BEGIN" << std::endl;
     while( ! eof ) {
-        {
-            std::cerr << "r: unique_lock call ... \n";
-            std::unique_lock<std::mutex> lk(m);
-            //std::cerr << "r: lock_guard call ... \n";
-            //std::lock_guard<std::mutex> lk(m);
+        if ( datafile >> next_value ) {
+            std::cerr << "r: " << next_value << std::endl;
+            std::cerr << "r: lock_guard call ... \n";
+            std::lock_guard<std::mutex> lk{m};
             std::cerr << "r:                 ... ok\n";
 
-            while ( queue.size() > queue_size ) {
-                std::cerr << "r: queue.size() to long ... = " << queue.size() << "\n";
-                cv2.wait(lk, []{ return queue.size() <= queue_size ; } );
-                std::cerr << "r: queue.size() reduced ... = " << queue.size() << "\n";
+            if ( queue.size() > queue_max_size ) {
+                skip = true;
             }
-            if ( datafile >> next_value ) {
-                std::cerr << "r: " << next_value << std::endl;
-                queue.push(next_value);
-            } else {
-                std::cerr << "r: EOF" << std::endl;
-                eof = true;
-                //queue.push(0);
-                //cv.notify_all();
-                //break;
+            if ( queue.size() > queue_min_size ) {
+                skip = false;
             }
-            //std::cerr << "r: unlock call ... " << queue.size() << "\n";
-            lk.unlock();
-            //std::cerr << "r:             ... ok \n";
-            //std::cerr << "r: lock_guard FREE ... queue.size=" << queue.size() << "\n";
+            if ( skip ) {
+                continue;
+            }
+
+            queue.push(next_value);
+        } else {
+            std::cerr << "r: EOF" << std::endl;
+            eof = true;
         }
         std::cerr << "r: notify_all sending ... " << queue.size() << "\n";
         cv.notify_all();
@@ -63,60 +55,52 @@ void action_read(){
     std::cerr << "Reader END" << std::endl;
 }
 
-void action_sum(){
+void action_sum(const int n){
+    int next_value;
     std::string tab = "                ";
-    std::cerr << "Summator BEGIN" << std::endl;
+    std::cerr << "Summator-" << n << " BEGIN" << std::endl;
     while( true ) {
-        {
-            std::cerr << tab     << "S: unique_lock call ... \n";
-            std::unique_lock<std::mutex> lk(m);
-            std::cerr << tab     << "S:                 ... ok\n";
-            std::cerr << tab     << "S: Waiting ... \n";
-            //cv.wait( lk, []{ return !queue.empty() || eof ; } );
-            while( queue.empty() && ! eof ) {
-                std::cerr << tab << "S:         ... 1.queue.empty()="<< queue.empty() <<", eof=" << eof << " \n";
-                cv.wait(lk);
-                std::cerr << tab << "S:         ... 2.queue.empty()="<< queue.empty() <<", eof=" << eof << " \n";
-            }
-            std::cerr << tab     << "S:         ... continue " << eof << " " << queue.empty() << "\n";
-            if ( eof && queue.empty() ) {
-                std::cerr << tab << "S: exit" <<  std::endl;
-                lk.unlock();
-                break;
-            }
-
-            char first = res_xor;
-            char second = (char)queue.front(); 
-
-            res_summary += queue.front();
-            res_xor = res_xor ^ (char)queue.front();
-            queue.pop();
-            cv2.notify_all();
-
-            std::cerr << "S: xor 1 " << ((std::bitset<8>)first).to_string()   << " " << (int)first   << std::endl
-                      << "S: xor 2 " << ((std::bitset<8>)second).to_string()  << "    " << (int)second  << std::endl
-                      << "S: xor = " << ((std::bitset<8>)res_xor).to_string() << "       " << (int)res_xor << std::endl
-                      << std::endl;
-
+        std::cerr << tab     << "S-" << n << ": unique_lock call ... \n";
+        std::unique_lock<std::mutex> lk(m);
+        std::cerr << tab     << "S-" << n << ":                 ... ok\n";
+        std::cerr << tab     << "S-" << n << ": Waiting ... \n";
+        while( queue.empty() && ! eof ) {
+            std::cerr << tab << "S-" << n << ":         ... 1.queue.empty()="<< queue.empty() <<", eof=" << eof << " \n";
+            cv.wait(lk);
+            std::cerr << tab << "S-" << n << ":         ... 2.queue.empty()="<< queue.empty() <<", eof=" << eof << " \n";
+        }
+        std::cerr << tab     << "S-" << n << ":         ... continue " << queue.size() << " eof" << eof << " empty:" << queue.empty() << "\n";
+        if ( eof && queue.empty() ) {
+            std::cerr << tab << "S-" << n << ": exit" <<  std::endl;
             lk.unlock();
+            break;
         }
 
-        std::cerr << tab << "S:" << res_summary << std::endl;
+        next_value = queue.front();
 
+        char first = res_xor;
+        char second = (char)next_value;
+
+        res_summary += next_value;
+        res_xor = res_xor ^ second;
+        queue.pop();
+
+        lk.unlock();
+
+        std::cerr << std::endl
+            << tab << "S-" << n << ": xor 1 " << ((std::bitset<8>)first).to_string()   << " "       << (int)first   << std::endl
+            << tab << "S-" << n << ": xor 2 " << ((std::bitset<8>)second).to_string()  << "    "    << (int)second  << std::endl
+            << tab << "S-" << n << ": xor = " << ((std::bitset<8>)res_xor).to_string() << "       " << (int)res_xor << std::endl
+            << std::endl;
+
+        std::cerr << tab << "S-" << n << ":" << res_summary << std::endl;
     }
-    std::cerr << "Summator END" << std::endl;
+    std::cerr << "Summator-" << n << " END" << std::endl;
 }
 
-// void action_xor(){
-//     while(!eof) {
-//         g_mut_xor.lock();
-//         res_xor ^= (char)next_value;
-//         //g_mut_xor.unlock();
-//         g_mut_xor_reader.unlock();
-//     }
-// }
-
 int main(){
+    queue_max_size = 255;
+    queue_max_size = 127;
 
     datafile.open("datafile.txt");
     if (datafile.is_open()) {
@@ -129,20 +113,18 @@ int main(){
     datafile >> first_value;
     res_summary = first_value;
     res_xor = first_value;
-    std::cerr << "First:" << first_value << ", sum:" << res_summary << ", xor:"  << (int)res_xor << std::endl;
 
     std::thread thr_reader(action_read);
-    std::thread thr_sum(action_sum);
-    //std::thread thr_xor(action_xor);
+    std::thread thr_sum(action_sum, 1);
+//    std::thread thr_sum2(action_sum, 2);
 
     thr_reader.join();
     thr_sum.join();
-    //thr_xor.join();
+//    thr_sum2.join();
+
 
     res_subtract = first_value * 2 - res_summary;
     std::bitset<8> res_xor_bin(res_xor);
-
-    //std::cerr << "Last:" << next_value << std::endl;
 
     std::cout << "Summary:     " << res_summary  << std::endl;
     std::cout << "Subtraction: " << res_subtract << std::endl;
