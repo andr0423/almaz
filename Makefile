@@ -63,7 +63,10 @@ actual: result
 
 diff:  expected  actual
 
-.PHONY:  diff  expected  actual
+check: expected  actual
+	diff $(EXPECT_FILE) $(ACTUAL_FILE)
+
+.PHONY:  diff  expected  actual  check
 
 clean:
 	rm -r -f ./$(EXEC_FILE)  ./$(EXEC_FILE).dSYM  $(ACTUAL_FILE)  ./__pycache__
