@@ -8,59 +8,79 @@
 
 bool eof = false;
 std::ifstream datafile;
-std::mutex m;
-std::condition_variable cv;
-std::queue<int> queue;
+size_t batch_size;
+
+std::mutex * mm[2]               { new std::mutex(),              new std::mutex() };
+std::condition_variable * ccv[2] { new std::condition_variable(), new std::condition_variable() };
+std::queue<int> * qq[2]          { new std::queue<int>(),         new std::queue<int> };
 
 void action_read(const uint queue_max_size, const uint queue_min_size){
     int next_value;
-    bool skip = false;
-    while( ! eof ) {
+    bool sskp[2] { false, false };
+    size_t rr = 0;
+    uint qs = 0;
+    while( ! eof || qs > 0 ) {
+        rr ^= 1;
 
-        std::lock_guard<std::mutex> lk(m);
-
-        uint qs = queue.size();
-        if ( qs > queue_max_size ) {
-            skip = true;
+        {
+            std::lock_guard<std::mutex> lk(*mm[rr]);
+            qs = (uint)qq[rr]->size();
         }
-        if ( skip ) {
+        
+        if ( qs > queue_max_size ) {
+            sskp[rr] = true;
+        }
+        if ( sskp[rr] ) {
             if ( qs < queue_min_size ) {
-                skip = false;
+                sskp[rr] = false;
             }
-            cv.notify_all();
+            ccv[rr]->notify_all();
             continue;
         }
 
-        if ( datafile >> next_value ) {
-            queue.push(next_value);
-        } else {
-            eof = true;
+        {
+            size_t repeat = 10;
+            std::lock_guard<std::mutex> lk(*mm[rr]);
+            while ( ! eof && repeat > 0 ){
+                repeat--;
+                if ( datafile >> next_value ) {
+                    qq[rr]->push(next_value);
+                } else {
+                    eof = true;
+                }
+            }
+            qs = (uint)qq[rr]->size();
         }
-        cv.notify_all();
 
+        ccv[rr]->notify_all();
     }
 }
 
-void action_sum( const int n , int & sm , char & xr ) {
+void action_sum( const size_t n , int & sm , char & xr ) {
     int sum_th = 0;
     char xor_th = 0;
     while( true ) {
         
-        std::unique_lock<std::mutex> lk(m);
+        std::unique_lock<std::mutex> lk(*mm[n]);
 
-        while( queue.empty() && ! eof ) {
-            cv.wait(lk);
+        while( qq[n]->empty() && ! eof ) {
+            ccv[n]->wait(lk);
         }
-        if ( eof && queue.empty() ) {
+        if ( eof && qq[n]->empty() ) {
             lk.unlock();
             break;
         }
 
-        int next_value = queue.front();
-        queue.pop();
+        size_t repeat = 10;
+        while ( repeat > 0 && ! qq[n]->empty() ) {
+            repeat--;
 
-        sum_th += next_value;
-        xor_th ^= (char)next_value;;
+            int next_value = qq[n]->front();
+            qq[n]->pop();
+
+            sum_th += next_value;
+            xor_th ^= (char)next_value;
+        }
 
         lk.unlock();
 
@@ -70,6 +90,7 @@ void action_sum( const int n , int & sm , char & xr ) {
 }
 
 int main(){
+    batch_size = 10;
     uint queue_max_size = 255;
     uint queue_min_size = 127;
 
@@ -93,8 +114,8 @@ int main(){
     datafile >> first_value;
 
     std::thread thr_reader( action_read, queue_max_size, queue_min_size );
-    std::thread thr_sum   ( action_sum, 1, std::ref(res_sum_1), std::ref(res_xor_1) );
-    std::thread thr_sum2  ( action_sum, 2, std::ref(res_sum_2), std::ref(res_xor_2) );
+    std::thread thr_sum   ( action_sum, 0, std::ref(res_sum_1), std::ref(res_xor_1) );
+    std::thread thr_sum2  ( action_sum, 1, std::ref(res_sum_2), std::ref(res_xor_2) );
 
     thr_reader.join();
     thr_sum.join();
@@ -111,6 +132,11 @@ int main(){
     std::cout << "Subtraction: " << res_subtract << std::endl;
     std::cout << "XOR:         " << res_xor_bin2.to_string() << ", '"  << (int)res_xor_all << "'" << std::endl;
 
+    for (size_t i = 0; i<2; i++) {
+        delete(mm[i]);
+        delete(ccv[i]);
+        delete(qq[i]);
+    }
     datafile.close();
     return 0;
 }
