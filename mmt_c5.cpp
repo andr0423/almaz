@@ -10,12 +10,14 @@ bool eof = false;
 std::ifstream datafile;
 size_t batch_size;
 
-std::mutex * mm[2]               { new std::mutex(),              new std::mutex() };
-std::condition_variable * ccv[2] { new std::condition_variable(), new std::condition_variable() };
-std::queue<int> * qq[2]          { new std::queue<int>(),         new std::queue<int> };
+std::mutex * mm[2];
+std::condition_variable * ccv[2];
+std::queue<long long> * qq[2];
+
 
 void action_read(const uint queue_max_size, const uint queue_min_size){
-    int next_value;
+    long long next_value;
+    
     bool sskp[2] { false, false };
     size_t rr = 0;
     uint qs = 0;
@@ -56,9 +58,9 @@ void action_read(const uint queue_max_size, const uint queue_min_size){
     }
 }
 
-void action_sum( const size_t n , int & sm , char & xr ) {
-    int sum_th = 0;
-    char xor_th = 0;
+void action_sum( const size_t n , long long & sm , long long & xr ) {
+    long long sum_th = 0;
+    long long xor_th = 0;
     while( true ) {
         
         std::unique_lock<std::mutex> lk(*mm[n]);
@@ -75,11 +77,11 @@ void action_sum( const size_t n , int & sm , char & xr ) {
         while ( repeat > 0 && ! qq[n]->empty() ) {
             repeat--;
 
-            int next_value = qq[n]->front();
+            long long next_value = qq[n]->front();
             qq[n]->pop();
 
             sum_th += next_value;
-            xor_th ^= (char)next_value;
+            xor_th ^= next_value;
         }
 
         lk.unlock();
@@ -89,26 +91,34 @@ void action_sum( const size_t n , int & sm , char & xr ) {
     xr = xor_th;
 }
 
-int main(){
+int main(int argc, char *argv[]){
     batch_size = 10;
     uint queue_max_size = 255;
     uint queue_min_size = 127;
 
-    int  res_summary;
-    int  res_subtract;
-    char res_xor_all;
+    long long res_summary;
+    long long res_subtract;
+    long long res_xor_all;
 
-    int first_value;
+    long long first_value;
+    long long res_sum_1 = 0, res_sum_2 = 0;
+    long long res_xor_1 = 0, res_xor_2 = 0;
 
-    int  res_sum_1 = 0, res_sum_2 = 0;
-    char res_xor_1 = 0, res_xor_2 = 0;
+    if (argc != 2) { 
+        std::cerr << "Expected file name as argument.\n" 
+                  <<  "Usage: " << argv[0] << " <filename>\n";
+        return 1; 
+    }
+    datafile.open(argv[1]);
+    if ( ! datafile.is_open()) {
+        std::cerr << "File '" << argv[1] << "' not exist or inaccessible...\n";
+        return 2;
+    }
 
-    datafile.open("datafile.txt");
-    if (datafile.is_open()) {
-        std::cerr << "File 'datafile.txt' openned.\n";
-    } else {
-        std::cerr << "File 'datafile.txt' not exist or unaccessible...\n";
-        return 1;
+    for (size_t i = 0; i<2; i++) {
+        mm[i]  = new std::mutex();
+        ccv[i] = new std::condition_variable();
+        qq[i]  = new std::queue<long long>();
     }
 
     datafile >> first_value;
@@ -121,16 +131,19 @@ int main(){
     thr_sum.join();
     thr_sum2.join();
 
-    int thread_sum = res_sum_1 + res_sum_2;
+    long long thread_sum = res_sum_1 + res_sum_2;
 
     res_summary  = first_value + thread_sum;
     res_subtract = first_value - thread_sum;
-    res_xor_all  = (char)first_value ^ res_xor_1 ^ res_xor_2;
+    res_xor_all  = first_value ^ res_xor_1 ^ res_xor_2;
 
-    std::bitset<8> res_xor_bin2(res_xor_all);
-    std::cout << "Summary:     " << res_summary  << std::endl;
-    std::cout << "Subtraction: " << res_subtract << std::endl;
-    std::cout << "XOR:         " << res_xor_bin2.to_string() << ", '"  << (int)res_xor_all << "'" << std::endl;
+    std::bitset<64> res_xor_bin2(res_xor_all);
+
+    std::cout << "Summary:     " << res_summary  << std::endl
+              << "Subtraction: " << res_subtract << std::endl
+              << "XOR:         " << res_xor_all  << ", '"
+                                 << res_xor_bin2.to_string() << "'"
+              << std::endl;
 
     for (size_t i = 0; i<2; i++) {
         delete(mm[i]);
