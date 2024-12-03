@@ -4,16 +4,63 @@ import sys
 
 random.seed()
 
-# -128 ... 127, but for right border or range 127+1
-MIN_RANGE = -128
-MAX_RANGE = 128
+TRACE = False
 
+USE_SIZE = 'unsigned int'
+
+SIZES_MTRX = {
+    'long long': {
+        'MIN': -9223372036854775808,
+        'MAX': 9223372036854775807,
+        'SIZE': 64,
+        },
+    'unsigned long long': {
+        'MIN': 0,
+        'MAX': 18446744073709551615,
+        'SIZE': 64,
+        },
+    'int': {
+        'MIN': -2147483648,
+        'MAX': 2147483647,
+        'SIZE': 32,
+        },
+    'unsigned int': {
+        'MIN': 0,
+        'MAX': 4294967295,
+        'SIZE': 32,
+        },
+    'short': {
+        'MIN': -32768,
+        'MAX': 32767,
+        'SIZE': 16,
+        },
+    'unsigned short': {
+        'MIN': 0,
+        'MAX': 65535,
+        'SIZE': 16,
+        },
+    'char': {
+        'MIN': -128,
+        'MAX': 127,
+        'SIZE': 8,
+        },
+    'unsigned char': {
+        'MIN': 0,
+        'MAX': 255,
+        'SIZE': 8,
+        },
+}
+
+SIZE      = SIZES_MTRX[USE_SIZE]['SIZE']
+MIN_RANGE = SIZES_MTRX[USE_SIZE]['MIN']
+MAX_RANGE = SIZES_MTRX[USE_SIZE]['MAX']
+ERROR_MSG = f'{USE_SIZE} value overload'
 
 class HwBin:
     value = []
     size = 64
 
-    def __init__(self, v: int = 0, s: int = 64):
+    def __init__(self, v: int = 0, s: int = SIZE):
         self.size = s
         self.value = self.from_int(v)
 
@@ -21,14 +68,10 @@ class HwBin:
         return ''.join([str(x) for x in self.value])
 
     def from_int(self, num):
-        if self.size >= 64 and (num < -9223372036854775808 or num > 9223372036854775807):
-            raise Exception('long long value overflow')
-        if self.size >= 32 and (num < -2147483648 or num > 2147483647):
-            raise Exception('int value overflow')
-        if self.size >= 16 and (num < -32768 or num > 32767):
-            raise Exception('short value overflow')
-        if self.size >= 8 and (num < -256 or num > 255):
-            raise Exception('char value overflow')
+
+        if self.size <= SIZE and (num < MIN_RANGE or MAX_RANGE < num):
+            raise Exception(ERROR_MSG)
+
         bits = [0 for _ in range(self.size)]
         # num_str = bin(num).removeprefix('-').removeprefix('0b')  # need python >=3.9
         num_str = bin(num).replace('-', '')[2:]
@@ -49,6 +92,9 @@ class HwBin:
         self.value = res
 
     def to_int(self):
+        if USE_SIZE.count('unsigned'):  # crutch
+            return self.to_uint()
+
         is_negative = self.value[0]
         if is_negative:
             invert = [abs(x - 1) for x in self.value]
@@ -64,7 +110,7 @@ class HwBin:
 
 
 def random_nl():
-    spaces = random.randrange(1, MAX_RANGE)
+    spaces = random.randrange(1, 255)
     return spaces
 
 
@@ -101,21 +147,23 @@ def main(fs=32, dt_filename='datafile.txt', exp_filename='datafile_expected.txt'
             first_bin = f'{res_xor}'
             second = HwBin(value)
             res_xor.xor(value)
-            print(
-                f'xor 1 {first_bin} {first_int} ({first_uint})\n'
-                f'xor 2 {second}     {second.to_int()} ({second.to_uint()})\n'
-                f'xor = {res_xor}         {res_xor.to_int()} ({res_xor.to_uint()})\n',
-                file=sys.stderr
-            )
+            if TRACE:
+                print(
+                    f'xor 1 {first_bin} {first_int} ({first_uint})\n'
+                    f'xor 2 {second}     {second.to_int()} ({second.to_uint()})\n'
+                    f'xor = {res_xor}         {res_xor.to_int()} ({res_xor.to_uint()})\n',
+                    file=sys.stderr
+                )
         else:
             writen_bytes += os.write(data_file, str.encode('\n'))
             break
 
     os.close(data_file)
     res_sub = (2 * first_value) - res_sum
+    res_xor_64 = HwBin(res_xor.to_int(), 64)
     result_string = f'Summary:     {res_sum}\n' \
                     f'Subtraction: {res_sub}\n' \
-                    f'XOR:         {res_xor.to_int()}, \'{res_xor}\'\n'
+                    f'XOR:         {res_xor.to_int()}, \'{res_xor_64}\'\n'
 
     print(result_string)
     result_file = os.open(exp_filename, attr, mode=0o664)
@@ -137,7 +185,7 @@ if __name__ == "__main__":
         file_size_arg = sys.argv[1]
         data_file_arg = sys.argv[2]
     elif len(sys.argv) == 2:
-        file_size = sys.argv[1]
+        file_size_arg = sys.argv[1]
 
     main(fs=int(file_size_arg), dt_filename=data_file_arg, exp_filename=expect_file_arg)
 

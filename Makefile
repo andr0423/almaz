@@ -9,7 +9,7 @@ TEST_EXPECT_FILE   ?= "$(basename $(TEST_DATA_FILE))_expected.txt"
 TEST_ACTUAL_FILE   ?= $(EXEC_FILE)_result.txt
 
 ifeq ($(SRC_FILE),$(EXEC_FILE))
-$(error "Incorrect src file name  without suffix, SRC_FILE='$(SRC_FILE)'")
+$(error "Incorrect src file name without suffix, SRC_FILE='$(SRC_FILE)'")
 endif
 
 help:

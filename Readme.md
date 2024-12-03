@@ -11,9 +11,9 @@ Makefile     - make [help|all|compile|datafile|run|result|expected|actual|diff|c
 
 make all     - compile, generate test datafile, run binary with test datafile, diff result
 
-make check   - compare generated tadafile and result from binary 
+make check   - compare generated tadafile and result from binary
 
-make execute - run with any datafile, by default "numbers_light.txt" 
+make execute - run with any datafile, by default "numbers_light.txt"
 
 make execute ORIGINAL_DATAFILE=anyfile.txt
 
